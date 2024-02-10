@@ -589,7 +589,7 @@ pub fn entry(args: TokenStream, input: TokenStream) -> TokenStream {
         FoundCrate::Itself => quote!(esp_lp_hal),
         FoundCrate::Name(name) => {
             let ident = Ident::new(&name, Span::call_site());
-            quote!( #ident::Something )
+            quote!( ::#ident )
         }
     };
 
@@ -625,17 +625,17 @@ pub fn entry(args: TokenStream, input: TokenStream) -> TokenStream {
                         }
                         used_pins.push(pin);
                         create_peripheral.push(quote!(
-                            let mut #param_name = unsafe { the_hal::gpio::conjure().unwrap() };
+                            let mut #param_name = unsafe { #hal_crate::gpio::conjure().unwrap() };
                         ));
                     }
                     "LpUart" => {
                         create_peripheral.push(quote!(
-                            let mut #param_name = unsafe { the_hal::uart::conjure() };
+                            let mut #param_name = unsafe { #hal_crate::uart::conjure() };
                         ));
                     }
                     "LpI2c" => {
                         create_peripheral.push(quote!(
-                            let mut #param_name = unsafe { the_hal::i2c::conjure() };
+                            let mut #param_name = unsafe { #hal_crate::i2c::conjure() };
                         ));
                     }
                     _ => {
@@ -666,7 +666,6 @@ pub fn entry(args: TokenStream, input: TokenStream) -> TokenStream {
 
             unsafe { ULP_MAGIC.as_ptr().read_volatile(); }
 
-            use #hal_crate as the_hal;
             #(
                 #create_peripheral;
             )*
