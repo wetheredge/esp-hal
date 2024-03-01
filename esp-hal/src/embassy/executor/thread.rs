@@ -2,11 +2,12 @@
 use core::marker::PhantomData;
 
 use embassy_executor::{raw, Spawner};
-use portable_atomic::{AtomicBool, Ordering};
+use portable_atomic::{AtomicBool, AtomicU32, Ordering};
+
 #[cfg(multi_core)]
 use procmacros::handler;
 
-use crate::get_core;
+use crate::{get_core, xtensa_lx::timer::get_cycle_count};
 #[cfg(multi_core)]
 use crate::peripherals::SYSTEM;
 
@@ -52,6 +53,7 @@ pub(crate) fn pend_thread_mode(core: usize) {
 /// Multi-core Xtensa Executor
 pub struct Executor {
     inner: raw::Executor,
+    idle_cycles: AtomicU32,
     not_send: PhantomData<*mut ()>,
 }
 
@@ -69,6 +71,7 @@ impl Executor {
 
         Self {
             inner: raw::Executor::new(usize::from_le_bytes([0, get_core() as u8, 0, 0]) as *mut ()),
+            idle_cycles: AtomicU32::new(0),
             not_send: PhantomData,
         }
     }
@@ -93,8 +96,9 @@ impl Executor {
     ///   -> !`), upgrading its lifetime with `transmute`. (unsafe)
     ///
     /// This function never returns.
-    pub fn run(&'static mut self, init: impl FnOnce(Spawner)) -> ! {
-        init(self.inner.spawner());
+    pub fn run(&'static mut self, init: impl FnOnce(Spawner, &'static AtomicU32)) -> ! {
+        let idle_cycles = &self.idle_cycles;
+        init(self.inner.spawner(), idle_cycles);
 
         let cpu = get_core() as usize;
 
@@ -102,19 +106,21 @@ impl Executor {
             unsafe {
                 self.inner.poll();
 
-                Self::wait_impl(cpu);
+                Self::wait_impl(cpu, idle_cycles);
             }
         }
     }
 
     #[doc(hidden)]
     #[cfg(xtensa)]
-    pub fn wait_impl(cpu: usize) {
+    pub fn wait_impl(cpu: usize, idle_cycles: &AtomicU32) {
         // Manual critical section implementation that only masks interrupts handlers.
         // We must not acquire the cross-core on dual-core systems because that would
         // prevent the other core from doing useful work while this core is sleeping.
         let token: critical_section::RawRestoreState;
         unsafe { core::arch::asm!("rsil {0}, 5", out(reg) token) };
+
+        let sleep = get_cycle_count();
 
         // we do not care about race conditions between the load and store operations,
         // interrupts will only set this value to true.
@@ -136,6 +142,9 @@ impl Executor {
             // take care not add code after `waiti` if it needs to be inside the CS
             unsafe { core::arch::asm!("waiti 0") }; // critical section ends
                                                     // here
+
+            let wake = get_cycle_count();
+            idle_cycles.fetch_add(wake.wrapping_sub(sleep), Ordering::AcqRel);
         }
     }
 
