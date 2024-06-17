@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- uart: Added `with_cts`/`with_rts`s methods to configure CTS, and RTS pins (#1592)
+- uart: Constructors now require TX and RX pins (#1592)
+- uart: Added `Uart::new_with_default_pins` constructor (#1592)
+- uart: Added `UartTx` and `UartRx` constructors (#1592)
+
+- Add Flex / AnyFlex GPIO pin driver (#1659)
+- Add new `DmaError::UnsupportedMemoryRegion` - used memory regions are checked when preparing a transfer now (#1670)
+
+### Fixed
+
+### Changed
+
+- Refactor `Dac1`/`Dac2` drivers into a single `Dac` driver (#1661)
+- esp-hal-embassy: make executor code optional (but default) again
+
+### Removed
+- uart: Removed `configure_pins` methods (#1592)
+
 ## [0.18.0] - 2024-06-04
 
 ### Added
